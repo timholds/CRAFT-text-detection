@@ -6,7 +6,7 @@ from torch.autograd import Variable
 from PIL import Image
 import numpy as np
 import cv2
-from huggingface_hub import hf_hub_url, cached_download
+from huggingface_hub import hf_hub_url, hf_hub_download
 
 from CRAFT.craft import CRAFT, init_CRAFT_model
 from CRAFT.refinenet import RefineNet, init_refiner_model
@@ -71,9 +71,13 @@ class CRAFTModel:
         for model_name in ['craft', 'refiner']:
             config = HF_MODELS[model_name]
             paths[model_name] = os.path.join(cache_dir, config['filename'])
+            # Replacement code
             if not local_files_only:
-                config_file_url = hf_hub_url(repo_id=config['repo_id'], filename=config['filename'])
-                cached_download(config_file_url, cache_dir=cache_dir, force_filename=config['filename'])
+                paths[model_name] = hf_hub_download(
+                    repo_id=config['repo_id'],
+                    filename=config['filename'],
+                    cache_dir=cache_dir
+                )
             
         self.net = init_CRAFT_model(paths['craft'], device, fp16=fp16)
         if self.use_refiner:
