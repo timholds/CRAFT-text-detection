@@ -71,7 +71,7 @@ class CRAFTModel:
         for model_name in ['craft', 'refiner']:
             config = HF_MODELS[model_name]
             paths[model_name] = os.path.join(cache_dir, config['filename'])
-            # Replacement code
+           
             if not local_files_only:
                 paths[model_name] = hf_hub_download(
                     repo_id=config['repo_id'],
