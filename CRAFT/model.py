@@ -116,38 +116,39 @@ class CRAFTModel:
             
             text_scores = y[..., 0]  # [B, H, W]
 
-        
-        # Threshold maps on GPU
-        text_mask = (text_scores > self.text_threshold)
-        link_mask = (link_scores > self.link_threshold)
-        combined_mask = text_mask & link_mask
-
-        # Find connected components using PyTorch's label
-        batch_labels = [
-            torch.ops.torchvision.label_connected_components(mask.float())
-            for mask in combined_mask
-        ]
-
-        # Extract polygon coordinates for each component
+        batch_size = batch_images.size(0)
+        # Process each image in the batch (minimize CPU transfers)
         batch_polys = []
-        for b_idx in range(batch_images.size(0)):
-            polys = []
-            for label in torch.unique(batch_labels[b_idx]):
-                if label == 0: continue
-                # Get component coordinates (GPU tensor)
-                y_coords, x_coords = torch.where(batch_labels[b_idx] == label)
-                if len(x_coords) < 4: continue
-                
-                # Find convex hull (custom kernel or approximation)
-                poly_points = self._convex_hull(x_coords, y_coords)
-                
-                # Scale coordinates using precomputed ratios
-                scaled_poly = poly_points * torch.tensor([
-                    [ratios_w[b_idx], ratios_h[b_idx]]
-                ], device=self.device)
-                
-                polys.append(scaled_poly)
-            batch_polys.append(polys)
+        for b_idx in range(batch_size):
+            # Extract scores for this image
+            text_score = text_scores[b_idx].cpu().numpy()
+            link_score = link_scores[b_idx].cpu().numpy()
+            
+            # Get current ratios
+            curr_ratio_w = ratios_w[b_idx].item() if isinstance(ratios_w, torch.Tensor) else ratios_w
+            curr_ratio_h = ratios_h[b_idx].item() if isinstance(ratios_h, torch.Tensor) else ratios_h
+            
+            # Use existing OpenCV-based post-processing
+            boxes, polys = getDetBoxes(
+                text_score, link_score,
+                self.text_threshold, self.link_threshold,
+                self.low_text, False  # Don't need detailed polygons, just boxes
+            )
+            
+            # Adjust coordinates
+            boxes = adjustResultCoordinates(boxes, curr_ratio_w, curr_ratio_h)
+            
+            # Convert to tensor and add to batch
+            image_polys = []
+            if len(boxes) > 0:
+                # Ensure boxes is in a list format before processing
+                boxes = boxes.tolist() if isinstance(boxes, np.ndarray) else boxes
+                for box in boxes:
+                    # Convert to tensor (4 corner points)
+                    box_tensor = torch.tensor(box, dtype=torch.float32, device=self.device)
+                    image_polys.append(box_tensor)
+                    
+            batch_polys.append(image_polys)
 
         return batch_polys
     
