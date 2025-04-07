@@ -107,13 +107,15 @@ class CRAFTModel:
         """Batch process pre-normalized images on GPU"""
         # Forward pass
         with torch.no_grad():
-            y, _ = self.net(batch_images)
+            y, feature = self.net(batch_images.to(self.device)) 
             if self.refiner:
-                y, _ = self.refiner(y, None)
+                y_refiner = self.refiner(y, feature)
+                link_scores = y_refiner[..., 0]  # [B, H, W]
+            else:
+                link_scores = y[..., 1]  # [B, H, W]
+            
+            text_scores = y[..., 0]  # [B, H, W]
 
-        # Batch post-processing
-        text_scores = y[..., 0]  # [B, H, W]
-        link_scores = y[..., 1] if not self.refiner else y[..., 0]
         
         # Threshold maps on GPU
         text_mask = (text_scores > self.text_threshold)
@@ -148,53 +150,24 @@ class CRAFTModel:
             batch_polys.append(polys)
 
         return batch_polys
+    
+    def _convex_hull(self, x_coords, y_coords):
+        """Simple convex hull approximation for GPU tensors"""
+        # For character detection, a simple bounding box is often sufficient
+        min_x = torch.min(x_coords)
+        max_x = torch.max(x_coords)
+        min_y = torch.min(y_coords)
+        max_y = torch.max(y_coords)
 
+        # Create rectangle corners
+        pts = torch.tensor([
+            [min_x, min_y],
+            [max_x, min_y],
+            [max_x, max_y],
+            [min_x, max_y]
+        ], device=x_coords.device)
 
-    def get_batch_polygons(self, batch_images: torch.Tensor, ratios_w: torch.Tensor, ratios_h: torch.Tensor):
-        """Batch process pre-normalized images on GPU"""
-        # Forward pass
-        with torch.no_grad():
-            y, _ = self.net(batch_images)
-            if self.refiner:
-                y, _ = self.refiner(y, None)
-
-        # Batch post-processing
-        text_scores = y[..., 0]  # [B, H, W]
-        link_scores = y[..., 1] if not self.refiner else y[..., 0]
-        
-        # Threshold maps on GPU
-        text_mask = (text_scores > self.text_threshold)
-        link_mask = (link_scores > self.link_threshold)
-        combined_mask = text_mask & link_mask
-
-        # Find connected components using PyTorch's label
-        batch_labels = [
-            torch.ops.torchvision.label_connected_components(mask.float())
-            for mask in combined_mask
-        ]
-
-        # Extract polygon coordinates for each component
-        batch_polys = []
-        for b_idx in range(batch_images.size(0)):
-            polys = []
-            for label in torch.unique(batch_labels[b_idx]):
-                if label == 0: continue
-                # Get component coordinates (GPU tensor)
-                y_coords, x_coords = torch.where(batch_labels[b_idx] == label)
-                if len(x_coords) < 4: continue
-                
-                # Find convex hull (custom kernel or approximation)
-                poly_points = self._convex_hull(x_coords, y_coords)
-                
-                # Scale coordinates using precomputed ratios
-                scaled_poly = poly_points * torch.tensor([
-                    [ratios_w[b_idx], ratios_h[b_idx]]
-                ], device=self.device)
-                
-                polys.append(scaled_poly)
-            batch_polys.append(polys)
-
-        return batch_polys
+        return pts
 
     def get_polygons(self, image: Image.Image) -> List[List[List[int]]]:
         x, ratio_w, ratio_h = preprocess_image(np.array(image), self.canvas_size, self.mag_ratio)
