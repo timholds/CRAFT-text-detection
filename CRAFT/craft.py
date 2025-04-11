@@ -82,7 +82,7 @@ class CRAFT(nn.Module):
 
         y = self.conv_cls(feature)
 
-        return y.permute(0,2,3,1), feature
+        return y.permute(0,2,3,1) #, feature
 
 
 def init_CRAFT_model(chekpoint_path: str, device: str, fp16: bool = True) -> CRAFT:

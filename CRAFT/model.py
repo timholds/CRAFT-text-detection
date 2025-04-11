@@ -107,9 +107,10 @@ class CRAFTModel:
         """Batch process pre-normalized images on GPU"""
         # Forward pass
         with torch.no_grad():
-            y, feature = self.net(batch_images.to(self.device)) 
+            y, features = self.net(batch_images.to(self.device))
+            
             if self.refiner:
-                y_refiner = self.refiner(y, feature)
+                y_refiner = self.refiner(y, features)
                 link_scores = y_refiner[..., 0]  # [B, H, W]
             else:
                 link_scores = y[..., 1]  # [B, H, W]
@@ -149,6 +150,8 @@ class CRAFTModel:
                     image_polys.append(box_tensor)
                     
             batch_polys.append(image_polys)
+
+        torch.cuda.empty_cache()
 
         return batch_polys
     
