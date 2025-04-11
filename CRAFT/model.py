@@ -107,14 +107,14 @@ class CRAFTModel:
         """Batch process pre-normalized images on GPU"""
         # Forward pass
         with torch.no_grad():
-            y, features = self.net(batch_images.to(self.device))
+            y = self.net(batch_images.to(self.device))
             
-            if self.refiner:
-                y_refiner = self.refiner(y, features)
-                link_scores = y_refiner[..., 0]  # [B, H, W]
-            else:
-                link_scores = y[..., 1]  # [B, H, W]
-            
+            # if self.refiner:
+            #     y_refiner = self.refiner(y, features)
+            #     link_scores = y_refiner[..., 0]  # [B, H, W]
+            # else:
+            #     link_scores = y[..., 1]  # [B, H, W]
+            link_scores = y[..., 1]  # [B, H, W]
             text_scores = y[..., 0]  # [B, H, W]
 
         batch_size = batch_images.size(0)
