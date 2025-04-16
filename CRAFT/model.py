@@ -217,3 +217,4 @@ class CRAFTModel:
         
         boxes_final = self._get_boxes_preproc(x, ratio_w, ratio_h)
         return boxes_final
+

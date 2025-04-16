@@ -27,10 +27,10 @@ def init_weights(modules):
 
 
 class vgg16_bn(torch.nn.Module):
-    def __init__(self, pretrained=True, freeze=True):
+    def __init__(self, weights=True, freeze=True):
         super(vgg16_bn, self).__init__()
         model_urls['vgg16_bn'] = model_urls['vgg16_bn'].replace('https://', 'http://')
-        vgg_pretrained_features = models.vgg16_bn(pretrained=pretrained).features
+        vgg_pretrained_features = models.vgg16_bn(weights=weights).features
         self.slice1 = torch.nn.Sequential()
         self.slice2 = torch.nn.Sequential()
         self.slice3 = torch.nn.Sequential()
@@ -52,7 +52,7 @@ class vgg16_bn(torch.nn.Module):
                 nn.Conv2d(1024, 1024, kernel_size=1)
         )
 
-        if not pretrained:
+        if not weights:
             init_weights(self.slice1.modules())
             init_weights(self.slice2.modules())
             init_weights(self.slice3.modules())
