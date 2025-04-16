@@ -125,8 +125,8 @@ class CRAFTModel:
         batch_polys = []
         text_scores = text_scores.cpu().numpy()
         link_scores = link_scores.cpu().numpy()
-        ratios_w = ratios_w.cpu().numpy()
-        ratios_h = ratios_h.cpu().numpy()
+        # ratios_w = ratios_w.cpu().numpy()
+        # ratios_h = ratios_h.cpu().numpy()
 
         # TODO can we do some of this stuff in parallel
         for b_idx in range(batch_size):
@@ -146,7 +146,6 @@ class CRAFTModel:
             )
             
             # Adjust coordinates
-            breakpoint()
             boxes = adjustResultCoordinates(boxes, curr_ratio_w, curr_ratio_h)
             
             # Convert to tensor and add to batch
