@@ -106,7 +106,7 @@ class CRAFTModel:
     def get_batch_polygons(self, batch_images: torch.Tensor, ratios_w: torch.Tensor, ratios_h: torch.Tensor):
         """Batch process pre-normalized images on GPU"""
         # Forward pass
-        batch_images = batch_images.float()  # Convert to float32
+        #batch_images = batch_images.float()  # Convert to float32
         if self.fp16:
             batch_images = batch_images.half()  # Convert to half if using fp16
 
