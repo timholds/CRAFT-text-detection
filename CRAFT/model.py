@@ -106,6 +106,10 @@ class CRAFTModel:
     def get_batch_polygons(self, batch_images: torch.Tensor, ratios_w: torch.Tensor, ratios_h: torch.Tensor):
         """Batch process pre-normalized images on GPU"""
         # Forward pass
+        batch_images = batch_images.float()  # Convert to float32
+        if self.fp16:
+            batch_images = batch_images.half()  # Convert to half if using fp16
+
         with torch.no_grad():
             y, feature = self.net(batch_images.to(self.device)) 
             if self.refiner:
@@ -119,10 +123,16 @@ class CRAFTModel:
         batch_size = batch_images.size(0)
         # Process each image in the batch (minimize CPU transfers)
         batch_polys = []
+        text_scores = text_scores.cpu().numpy()
+        link_scores = link_scores.cpu().numpy()
+        ratios_w = ratios_w.cpu().numpy()
+        ratios_h = ratios_h.cpu().numpy()
+
+        # TODO can we do some of this stuff in parallel
         for b_idx in range(batch_size):
             # Extract scores for this image
-            text_score = text_scores[b_idx].cpu().numpy()
-            link_score = link_scores[b_idx].cpu().numpy()
+            # text_score = text_scores[b_idx].cpu().numpy()
+            # link_score = link_scores[b_idx].cpu().numpy()
             
             # Get current ratios
             curr_ratio_w = ratios_w[b_idx].item() if isinstance(ratios_w, torch.Tensor) else ratios_w
@@ -130,12 +140,13 @@ class CRAFTModel:
             
             # Use existing OpenCV-based post-processing
             boxes, polys = getDetBoxes(
-                text_score, link_score,
+                text_scores[b_idx], link_scores[b_idx],
                 self.text_threshold, self.link_threshold,
                 self.low_text, False  # Don't need detailed polygons, just boxes
             )
             
             # Adjust coordinates
+            breakpoint()
             boxes = adjustResultCoordinates(boxes, curr_ratio_w, curr_ratio_h)
             
             # Convert to tensor and add to batch
@@ -144,9 +155,7 @@ class CRAFTModel:
                 # Ensure boxes is in a list format before processing
                 boxes = boxes.tolist() if isinstance(boxes, np.ndarray) else boxes
                 for box in boxes:
-                    # Convert to tensor (4 corner points)
-                    box_tensor = torch.tensor(box, dtype=torch.float32, device=self.device)
-                    image_polys.append(box_tensor)
+                    image_polys.append(box)
                     
             batch_polys.append(image_polys)
 
