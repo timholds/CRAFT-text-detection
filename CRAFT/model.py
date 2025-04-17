@@ -6,8 +6,10 @@ from torch.autograd import Variable
 from PIL import Image
 import numpy as np
 import cv2
-from huggingface_hub import hf_hub_url, hf_hub_download
+from multiprocessing import Pool
+import functools
 
+from huggingface_hub import hf_hub_url, hf_hub_download
 from CRAFT.craft import CRAFT, init_CRAFT_model
 from CRAFT.refinenet import RefineNet, init_refiner_model
 from CRAFT.craft_utils import adjustResultCoordinates, getDetBoxes
@@ -39,6 +41,16 @@ def preprocess_image(image: np.ndarray, canvas_size: int, mag_ratio: bool):
     x = Variable(x.unsqueeze(0))                # [c, h, w] to [b, c, h, w]
     return x, ratio_w, ratio_h
 
+def process_single(args):
+    text_score, link_score, ratio_w, ratio_h, text_threshold, link_threshold, low_text = args
+
+    boxes, polys = getDetBoxes(
+        text_score, link_score,
+        text_threshold, link_threshold,
+        low_text, False
+    )
+    boxes = adjustResultCoordinates(boxes, ratio_w, ratio_h)
+    return boxes
 
 class CRAFTModel:
     
@@ -103,6 +115,7 @@ class CRAFTModel:
             
         return score_text, score_link
 
+    
     def get_batch_polygons(self, batch_images: torch.Tensor, ratios_w: torch.Tensor, ratios_h: torch.Tensor):
         """Batch process pre-normalized images on GPU"""
         # Forward pass
@@ -121,44 +134,50 @@ class CRAFTModel:
             text_scores = y[..., 0]  # [B, H, W]
 
         batch_size = batch_images.size(0)
-        # Process each image in the batch (minimize CPU transfers)
-        batch_polys = []
         text_scores = text_scores.detach().cpu().numpy()
         link_scores = link_scores.detach().cpu().numpy()
-        # ratios_w = ratios_w.cpu().numpy()
-        # ratios_h = ratios_h.cpu().numpy()
+       
+        ratios_w = ratios_w.cpu().numpy()
+        ratios_h = ratios_h.cpu().numpy()
 
-        # TODO can we do some of this stuff in parallel
-        for b_idx in range(batch_size):
-            # Extract scores for this image
-            # text_score = text_scores[b_idx].cpu().numpy()
-            # link_score = link_scores[b_idx].cpu().numpy()
-            
-            # Get current ratios
-            curr_ratio_w = ratios_w[b_idx].item() if isinstance(ratios_w, torch.Tensor) else ratios_w
-            curr_ratio_h = ratios_h[b_idx].item() if isinstance(ratios_h, torch.Tensor) else ratios_h
-            
-            # Use existing OpenCV-based post-processing
-            boxes, polys = getDetBoxes(
-                text_scores[b_idx], link_scores[b_idx],
-                self.text_threshold, self.link_threshold,
-                self.low_text, False  # Don't need detailed polygons, just boxes
-            )
-            
-            # Adjust coordinates
-            boxes = adjustResultCoordinates(boxes, curr_ratio_w, curr_ratio_h)
-            
-            # Convert to tensor and add to batch
-            image_polys = []
-            if len(boxes) > 0:
-                # Ensure boxes is in a list format before processing
-                boxes = boxes.tolist() if isinstance(boxes, np.ndarray) else boxes
-                for box in boxes:
-                    image_polys.append(box)
-                    
-            batch_polys.append(image_polys)
+        with Pool(processes=os.cpu_count()) as pool:
+            batch_args = [(text_scores[i], link_scores[i], ratios_w[i], ratios_h[i], 
+                           self.text_threshold, self.link_threshold, self.low_text) 
+                            for i in range(batch_size)]
+            batch_polys = pool.map(process_single, batch_args)
 
         return batch_polys
+
+        # TODO can we do some of this stuff in parallel
+        # batch_polys = []
+
+        # for b_idx in range(batch_size):
+            
+        #     # Get current ratios
+        #     curr_ratio_w = ratios_w[b_idx].item() if isinstance(ratios_w, torch.Tensor) else ratios_w
+        #     curr_ratio_h = ratios_h[b_idx].item() if isinstance(ratios_h, torch.Tensor) else ratios_h
+            
+        #     # Use existing OpenCV-based post-processing
+        #     boxes, polys = getDetBoxes(
+        #         text_scores[b_idx], link_scores[b_idx],
+        #         self.text_threshold, self.link_threshold,
+        #         self.low_text, False  # Don't need detailed polygons, just boxes
+        #     )
+            
+        #     # Adjust coordinates
+        #     boxes = adjustResultCoordinates(boxes, curr_ratio_w, curr_ratio_h)
+            
+        #     # Convert to tensor and add to batch
+        #     image_polys = []
+        #     if len(boxes) > 0:
+        #         # Ensure boxes is in a list format before processing
+        #         boxes = boxes.tolist() if isinstance(boxes, np.ndarray) else boxes
+        #         for box in boxes:
+        #             image_polys.append(box)
+                    
+        #     batch_polys.append(image_polys)
+
+        # return batch_polys
     
     def _convex_hull(self, x_coords, y_coords):
         """Simple convex hull approximation for GPU tensors"""
