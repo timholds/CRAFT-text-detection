@@ -147,37 +147,6 @@ class CRAFTModel:
             batch_polys = pool.map(process_single, batch_args)
 
         return batch_polys
-
-        # TODO can we do some of this stuff in parallel
-        # batch_polys = []
-
-        # for b_idx in range(batch_size):
-            
-        #     # Get current ratios
-        #     curr_ratio_w = ratios_w[b_idx].item() if isinstance(ratios_w, torch.Tensor) else ratios_w
-        #     curr_ratio_h = ratios_h[b_idx].item() if isinstance(ratios_h, torch.Tensor) else ratios_h
-            
-        #     # Use existing OpenCV-based post-processing
-        #     boxes, polys = getDetBoxes(
-        #         text_scores[b_idx], link_scores[b_idx],
-        #         self.text_threshold, self.link_threshold,
-        #         self.low_text, False  # Don't need detailed polygons, just boxes
-        #     )
-            
-        #     # Adjust coordinates
-        #     boxes = adjustResultCoordinates(boxes, curr_ratio_w, curr_ratio_h)
-            
-        #     # Convert to tensor and add to batch
-        #     image_polys = []
-        #     if len(boxes) > 0:
-        #         # Ensure boxes is in a list format before processing
-        #         boxes = boxes.tolist() if isinstance(boxes, np.ndarray) else boxes
-        #         for box in boxes:
-        #             image_polys.append(box)
-                    
-        #     batch_polys.append(image_polys)
-
-        # return batch_polys
     
     def _convex_hull(self, x_coords, y_coords):
         """Simple convex hull approximation for GPU tensors"""
