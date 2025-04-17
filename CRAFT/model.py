@@ -123,8 +123,8 @@ class CRAFTModel:
         batch_size = batch_images.size(0)
         # Process each image in the batch (minimize CPU transfers)
         batch_polys = []
-        text_scores = text_scores.cpu().numpy()
-        link_scores = link_scores.cpu().numpy()
+        text_scores = text_scores.detach().cpu().numpy()
+        link_scores = link_scores.detach().cpu().numpy()
         # ratios_w = ratios_w.cpu().numpy()
         # ratios_h = ratios_h.cpu().numpy()
 
